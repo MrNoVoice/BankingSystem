@@ -34,3 +34,4 @@ C:\Users\VOICE\Desktop\BankingSystem\obj\Debug\net9.0\refint\BankingSystem.dll
 C:\Users\VOICE\Desktop\BankingSystem\obj\Debug\net9.0\BankingSystem.pdb
 C:\Users\VOICE\Desktop\BankingSystem\obj\Debug\net9.0\BankingSystem.genruntimeconfig.cache
 C:\Users\VOICE\Desktop\BankingSystem\obj\Debug\net9.0\ref\BankingSystem.dll
+C:\Users\VOICE\Desktop\BankingSystem\obj\Debug\net9.0\BankingSystem.sourcelink.json

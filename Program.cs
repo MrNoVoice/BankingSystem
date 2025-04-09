@@ -8,17 +8,17 @@ namespace BankingSystem
 {
     class DatabaseConnection
     {
-        private string connectionString = "server=127.0.0.1;user=root;database=BankingSystem;port=3306;password=Guddusah.";
-
+        // Retrieve from environment variables
+        private string connectionString = $"server=127.0.0.1;user=root;database=BankingSystem;port=3306;password={Environment.GetEnvironmentVariable("DB_PASSWORD")}";
         public MySqlConnection GetConnection()
         {
             return new MySqlConnection(connectionString);
-        }       
+        }
     }
 
     class Accounts
     {
-        
+
     }
 
     class Transactions
@@ -38,7 +38,7 @@ namespace BankingSystem
         public DateTime createdAt { get; set; }
 
         // Constructor
-        public Users(string userID, string fullname, string email,string phone, string password, DateTime createdAt)
+        public Users(string userID, string fullname, string email, string phone, string password, DateTime createdAt)
         {
             this.userID = userID;
             this.fullname = fullname;

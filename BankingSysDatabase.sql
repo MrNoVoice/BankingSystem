@@ -35,6 +35,10 @@ CREATE TABLE Admins (
     Password VARCHAR(255)
 );
 
+SELECT * FROM users;
+DELETE FROM users WHERE UserID = 1;
+
+
 
 
 
