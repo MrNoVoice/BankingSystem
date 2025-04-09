@@ -8,12 +8,22 @@ namespace BankingSystem
 {
     class DatabaseConnection
     {
-        private string connectionString = "server=127.0.0.1;user=root;database=BankingSystem;port=3306;password=Guddusah152.;";
+        private string connectionString = "server=127.0.0.1;user=root;database=BankingSystem;port=3306;password=Guddusah.";
 
         public MySqlConnection GetConnection()
         {
             return new MySqlConnection(connectionString);
         }       
+    }
+
+    class Accounts
+    {
+        
+    }
+
+    class Transactions
+    {
+
     }
 
     class Users
@@ -22,15 +32,18 @@ namespace BankingSystem
         public string userID { get; set; }
         public string fullname { get; set; }
         public string email { get; set; }
+        public string phone { get; set; }
+
         public string password { get; set; }
         public DateTime createdAt { get; set; }
 
         // Constructor
-        public Users(string userID, string fullname, string email, string password, DateTime createdAt)
+        public Users(string userID, string fullname, string email,string phone, string password, DateTime createdAt)
         {
             this.userID = userID;
             this.fullname = fullname;
             this.email = email;
+            this.phone = phone;
             this.password = password;
             this.createdAt = createdAt;
         }
@@ -73,6 +86,9 @@ namespace BankingSystem
             Console.Write("Enter your email: ");
             string email = Console.ReadLine()!;
 
+            Console.Write("Enter your Phone number: ");
+            string phone = Console.ReadLine()!;
+
             Console.Write("Enter your password: ");
             string password = Console.ReadLine()!;
 
@@ -81,6 +97,7 @@ namespace BankingSystem
                 userID: "",  // Empty because MySQL will auto-increment it
                 fullname: fullname,
                 email: email,
+                phone: phone,
                 password: password,  // You can hash it here for security
                 createdAt: DateTime.Now
             );
