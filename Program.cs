@@ -1,39 +1,26 @@
 ﻿using System;
 using MySql.Data.MySqlClient;
-using Mysqlx.Crud;
-using Mysqlx.Expr;
-using static Org.BouncyCastle.Asn1.Cmp.Challenge;
 
 namespace BankingSystem
 {
     class DatabaseConnection
     {
-        // Retrieve from environment variables
+        // Connection string for MySQL
         private string connectionString = $"server=127.0.0.1;user=root;database=BankingSystem;port=3306;password={Environment.GetEnvironmentVariable("DB_PASSWORD")}";
+
         public MySqlConnection GetConnection()
         {
             return new MySqlConnection(connectionString);
         }
     }
 
-    class Accounts
-    {
-
-    }
-
-    class Transactions
-    {
-
-    }
-
     class Users
     {
-        // properties
+        // Properties
         public string userID { get; set; }
         public string fullname { get; set; }
         public string email { get; set; }
         public string phone { get; set; }
-
         public string password { get; set; }
         public DateTime createdAt { get; set; }
 
@@ -76,41 +63,41 @@ namespace BankingSystem
     {
         static void Main(string[] args)
         {
-            var conn = new DatabaseConnection().GetConnection();
-            conn.Open();
+            // Use "using" block to automatically close the connection after usage
+            using (var conn = new DatabaseConnection().GetConnection())
+            {
+                conn.Open();
 
-            // Ask user for name, email, and password
-            Console.Write("Enter your name: ");
-            string fullname = Console.ReadLine()!;
+                // Ask user for name, email, and password
+                Console.Write("Enter your name: ");
+                string fullname = Console.ReadLine();
 
-            Console.Write("Enter your email: ");
-            string email = Console.ReadLine()!;
+                Console.Write("Enter your email: ");
+                string email = Console.ReadLine();
 
-            Console.Write("Enter your Phone number: ");
-            string phone = Console.ReadLine()!;
+                Console.Write("Enter your Phone number: ");
+                string phone = Console.ReadLine();
 
-            Console.Write("Enter your password: ");
-            string password = Console.ReadLine()!;
+                Console.Write("Enter your password: ");
+                string password = Console.ReadLine();
 
-            // Create a new user object with the entered data
-            Users newUser = new Users(
-                userID: "",  // Empty because MySQL will auto-increment it
-                fullname: fullname,
-                email: email,
-                phone: phone,
-                password: password,  // You can hash it here for security
-                createdAt: DateTime.Now
-            );
+                // Create a new user object with the entered data
+                Users newUser = new Users(
+                    userID: "",  // Empty because MySQL will auto-increment it
+                    fullname: fullname,
+                    email: email,
+                    phone: phone,
+                    password: password,  // You can hash it here for security
+                    createdAt: DateTime.Now
+                );
 
-            // Add the user to the database
-            Users.AddUsersToDatabase(conn, newUser);
+                // Add the user to the database
+                Users.AddUsersToDatabase(conn, newUser);
 
-            conn.Close();
+                Console.WriteLine("User added successfully!");
+            }
 
-            Console.WriteLine("User added successfully!");
             Console.ReadLine();
         }
-
-
     }
 }
