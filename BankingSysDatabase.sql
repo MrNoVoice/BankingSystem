@@ -12,10 +12,11 @@ CREATE TABLE Users (
 
 CREATE TABLE Accounts (
     AccountID INT AUTO_INCREMENT PRIMARY KEY,
-    UserID INT,
+    HolderName VARCHAR(100),
     Balance DECIMAL(10,2) DEFAULT 0.00,
     AccountType ENUM('Savings', 'Current'),
     CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	status VARCHAR(20) DEFAULT 'Active',
     FOREIGN KEY (UserID) REFERENCES Users(UserID)
 );
 
@@ -36,9 +37,5 @@ CREATE TABLE Admins (
 );
 
 SELECT * FROM users;
-DELETE FROM users WHERE UserID = 1;
-
-
-
 
 
