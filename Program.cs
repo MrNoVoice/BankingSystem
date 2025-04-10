@@ -37,7 +37,7 @@ namespace BankingSystem
         }
 
         // Static method to add user to the database
-        public static void AddUsersToDatabase(MySqlConnection conn, Users newUser)
+        public static int AddUsersToDatabase(MySqlConnection conn, Users newUser)
         {
             try
             {
@@ -45,19 +45,19 @@ namespace BankingSystem
                 if (!ValidationHelper.IsValidEmail(newUser.email))
                 {
                     Console.WriteLine("Invalid email format.");
-                    return;
+                    return -1;
                 }
 
                 if (!ValidationHelper.IsValidPhone(newUser.phone))
                 {
                     Console.WriteLine("Invalid phone number format.");
-                    return;
+                    return -1;
                 }
 
                 if (!ValidationHelper.IsValidName(newUser.fullname))
                 {
                     Console.WriteLine("Invalid name format.");
-                    return;
+                    return -1;
                 }
 
                 // SQL query to insert a new user into the Users table
@@ -72,11 +72,19 @@ namespace BankingSystem
                 cmd.Parameters.AddWithValue("@CreatedAt", newUser.createdAt);
 
                 cmd.ExecuteNonQuery();
-                Console.WriteLine("User added successfully!");
+
+                // Retrieve the last inserted user ID
+                string userIdQuery = "SELECT LAST_INSERT_ID()";
+                var userIdCmd = new MySqlCommand(userIdQuery, conn);
+                int userId = Convert.ToInt32(userIdCmd.ExecuteScalar()); // Get the last inserted ID
+
+                Console.WriteLine("\nUser added successfully!");
+                return userId;  // Return the user ID
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error adding user: {ex.Message}");
+                return -1;
             }
         }
     }
@@ -161,7 +169,7 @@ namespace BankingSystem
             {
                 try
                 {
-                    conn.Open();                  
+                    conn.Open();
                 }
                 catch (Exception ex)
                 {
@@ -191,11 +199,53 @@ namespace BankingSystem
                     createdAt: DateTime.Now
                 );
 
-                // Add the user to the database
-                Users.AddUsersToDatabase(conn, newUser);
-            }
+                // Add the user to the database and get the user ID
+                int userID = Users.AddUsersToDatabase(conn, newUser);
 
-            Console.ReadLine();
+                if (userID == -1)
+                {
+                    return;  // Exit if user creation failed
+                }
+
+                string createAccountChoice = Console.ReadLine().ToLower();
+                if (createAccountChoice == "yes")
+                {
+                    string accountType = GetUserInput("\nEnter the type of account (Savings / Current): ",
+                        input => input == "Savings" || input == "Current");
+
+                    decimal initialBalance;
+                    Console.Write("Enter the initial balance for the account: ");
+                    while (true)
+                    {
+                        if (decimal.TryParse(Console.ReadLine(), out initialBalance) && initialBalance > 0)
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            Console.WriteLine("Invalid balance. Please enter a valid balance.");
+                        }
+                    }
+
+                    Accounts newAccount = new Accounts(
+                         holderName: fullname,  // This can be the same name as the user
+                         balance: initialBalance,  // Use the input balance
+                         accountType: accountType,  // Account type from the previous prompt
+                         userID: userID,  // Use the userID returned from AddUsersToDatabase
+                         status: "Active"  // Default status is "Active"
+                    );
+
+                    Accounts.AddAccountToDatabase(conn, newAccount);
+                }
+                else if (createAccountChoice == "no")
+                {
+                    Console.WriteLine("No account created.");
+                }
+                else
+                {
+                    Console.WriteLine("Invalid input. Exiting.");
+                }
+            }
         }
 
         // Helper method to get valid user input
