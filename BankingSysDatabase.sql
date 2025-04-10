@@ -44,3 +44,6 @@ CREATE TABLE Admins (
     Password VARCHAR(255)                      -- Admin password (hashed later)
 );
 
+
+
+
