@@ -43,5 +43,4 @@ CREATE TABLE Admins (
     Username VARCHAR(50) UNIQUE,               -- Username of the admin (unique)
     Password VARCHAR(255)                      -- Admin password (hashed later)
 );
- 
 
