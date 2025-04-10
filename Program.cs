@@ -207,14 +207,17 @@ namespace BankingSystem
                     return;  // Exit if user creation failed
                 }
 
+                string createAccountChoice = Console.Write("Do you want to create a account (yes/no) ? : ")
                 string createAccountChoice = Console.ReadLine().ToLower();
+
                 if (createAccountChoice == "yes")
                 {
                     string accountType = GetUserInput("\nEnter the type of account (Savings / Current): ",
-                        input => input == "Savings" || input == "Current");
+                        input => input.ToLower() == "savings" || input.ToLower() == "current");
 
                     decimal initialBalance;
-                    Console.Write("Enter the initial balance for the account: ");
+
+                    Console.Write("\nEnter the initial balance for the account: ");
                     while (true)
                     {
                         if (decimal.TryParse(Console.ReadLine(), out initialBalance) && initialBalance > 0)
@@ -223,7 +226,7 @@ namespace BankingSystem
                         }
                         else
                         {
-                            Console.WriteLine("Invalid balance. Please enter a valid balance.");
+                            Console.WriteLine("\nInvalid balance. Please enter a valid balance.");
                         }
                     }
 
@@ -239,11 +242,11 @@ namespace BankingSystem
                 }
                 else if (createAccountChoice == "no")
                 {
-                    Console.WriteLine("No account created.");
+                    Console.WriteLine("\nNo account created.");
                 }
                 else
                 {
-                    Console.WriteLine("Invalid input. Exiting.");
+                    Console.WriteLine("\nInvalid input. Exiting.");
                 }
             }
         }
