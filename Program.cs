@@ -122,6 +122,70 @@ namespace BankingSystem
         }
     }
 
+    public class Transactions
+    {
+        public string TransactionID { get; set; }
+        public string AccountID { get; set; }
+        public string TransactionType { get; set; }
+        public decimal Amount { get; set; }
+        public DateTime TransactionDate { get; set; }
+
+        public Transactions(string transactionID, string accountID, string transactionType, decimal amount, DateTime transactionDate)
+        {
+            TransactionID = transactionID;
+            AccountID = accountID;
+            TransactionType = transactionType;
+            Amount = amount;
+            TransactionDate = transactionDate;
+        }
+
+        public static bool AddTransactionsToDatabase(MySqlConnection conn, Transactions newTransaction)
+        {
+            try
+            {
+                string query = @"INSERT INTO transactions (TransactionID, AccountID, Type, Amount, TransactionDate)
+                             VALUES (@TransactionID, @AccountID, @Type, @Amount, @TransactionDate)";
+
+                using (var cmd = new MySqlCommand(query, conn))
+                {
+                    cmd.Parameters.AddWithValue("@TransactionID", newTransaction.TransactionID);
+                    cmd.Parameters.AddWithValue("@AccountID", newTransaction.AccountID);
+                    cmd.Parameters.AddWithValue("@Type", newTransaction.TransactionType);
+                    cmd.Parameters.AddWithValue("@Amount", newTransaction.Amount);
+                    cmd.Parameters.AddWithValue("@TransactionDate", newTransaction.TransactionDate);
+
+                    int rowsAffected = cmd.ExecuteNonQuery();
+                    return rowsAffected > 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in process of transaction: {ex.Message}");
+                return false;
+            }
+        }
+
+        public static void ViewTransactions(MySqlConnection conn, string accountId)
+        {
+            string query = "SELECT * FROM transactions WHERE AccountID = @accountId";
+            using (var cmd = new MySqlCommand(query, conn))
+            {
+                cmd.Parameters.AddWithValue("@accountId", accountId);
+
+                using (var reader = cmd.ExecuteReader())
+                {
+                    Console.WriteLine("\nTransaction History:");
+                    while (reader.Read())
+                    {
+                        Console.WriteLine($"{reader["TransactionDate"]} | " +
+                                        $"{reader["Type"]} | " +
+                                        $"{reader["Amount"]}");
+                    }
+                }
+            }
+        }
+    }
+
     static class ValidationHelper
     {
         public static bool IsValidEmail(string email)
@@ -171,7 +235,7 @@ namespace BankingSystem
 
         static void Main(string[] args)
         {
-            Console.WriteLine("Welcome to the Banking System!");
+            Console.WriteLine("Welcome to the Super Secure Bank!");
             Console.WriteLine("Please create a new user profile before creating an account.");
             Console.WriteLine("Let's get started...");
 
@@ -225,8 +289,8 @@ namespace BankingSystem
                     Console.Write("\nEnter initial balance: ");
                     while (!decimal.TryParse(Console.ReadLine(), out initialBalance) || initialBalance < 0)
                     {
-                        Console.WriteLine("Invalid amount. Please enter a positive number.");
-                        Console.Write("Enter initial balance: ");
+                        Console.WriteLine("\nInvalid amount. Please enter a positive number.");
+                        Console.Write("\nEnter initial balance: ");
                     }
 
                     var newAccount = new Account(fullName, initialBalance, accountType, userId);
@@ -249,6 +313,103 @@ namespace BankingSystem
                 {
                     Console.WriteLine("Account creation skipped.");
                 }
+
+                // Transaction section
+                Console.WriteLine();
+                Console.WriteLine("===================================");
+                Console.WriteLine(" Welcome to Super Secure Bank ");
+                Console.WriteLine("===================================");
+                Console.WriteLine("Please choose a transaction:");
+                Console.WriteLine("1. Deposit");
+                Console.WriteLine("2. Withdraw");
+                Console.WriteLine("3. Transfer");
+                Console.WriteLine("4. View Transaction History");
+                Console.WriteLine("0. Exit");
+                Console.WriteLine("===================================");
+
+                Console.Write("\nEnter your choice: ");
+                string choice = Console.ReadLine();
+
+                switch (choice)
+                {
+                    case "1":
+                        Console.WriteLine("You chose Deposit!");
+                        Console.Write("Enter your Account ID: ");
+                        string depositAccountId = Console.ReadLine();
+
+                        Console.Write("\nEnter amount to deposit: ");
+                        decimal depositAmount;
+                        while (!decimal.TryParse(Console.ReadLine(), out depositAmount) || depositAmount <= 0)
+                        {
+                            Console.Write("Invalid amount. Enter a positive number: ");
+                        }
+                        break;
+
+                    case "2":
+                        Console.WriteLine("\nYou chose Withdraw!");
+                        Console.Write("\nEnter your Account ID: ");
+                        string withdrawAccountId = Console.ReadLine();
+
+                        Console.Write("\nEnter amount to withdraw: ");
+                        decimal withdrawAmount;
+                        while (!decimal.TryParse(Console.ReadLine(), out withdrawAmount) || withdrawAmount <= 0)
+                        {
+                            Console.Write("\nInvalid amount. Enter a positive number: ");
+                        }
+                        break;
+
+                    case "3":
+                        Console.WriteLine("\nYou chose Transfer!");
+                        Console.Write("Enter your Account ID: ");
+                        string fromAccount = Console.ReadLine();
+
+                        Console.Write("Enter recipient Account ID: ");
+                        string toAccount = Console.ReadLine();
+
+                        Console.Write("Enter amount: ");
+                        decimal amount = decimal.Parse(Console.ReadLine());
+
+                        // Record transfer-out transaction
+                        var transferOut = new Transactions(
+                            Guid.NewGuid().ToString(),
+                            fromAccount,
+                            "Transfer Out",
+                            amount,
+                            DateTime.Now
+                        );
+
+                        // Record transfer-in transaction
+                        var transferIn = new Transactions(
+                            Guid.NewGuid().ToString(),
+                            toAccount,
+                            "Transfer In",
+                            amount,
+                            DateTime.Now
+                        );
+
+                        Transactions.AddTransactionsToDatabase(conn, transferOut);
+                        Transactions.AddTransactionsToDatabase(conn, transferIn);
+
+                        Console.WriteLine("Transfer recorded!");
+                        break;
+
+                    case "4":
+                        Console.WriteLine("\nYou chose Transaction History!");
+                        Console.Write("Enter Account ID: ");
+                        string accountId = Console.ReadLine();
+                        Transactions.ViewTransactions(conn, accountId);
+                        break;
+
+                    case "0":
+                        Console.WriteLine("\nExiting... Goodbye!");
+                        break;
+
+                    default:
+                        Console.WriteLine("\nInvalid choice! Try again.");
+                        break;
+                }
+
+                Console.WriteLine("Thank you for choosing our bank.");
 
                 Console.WriteLine("\nPress any key to exit...");
                 Console.ReadKey();
