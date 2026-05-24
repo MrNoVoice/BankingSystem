@@ -1,16 +1,58 @@
-﻿using System;
+using System;
 using System.Text.RegularExpressions;
-using MySql.Data.MySqlClient;
+using Microsoft.Data.Sqlite;
 
 namespace BankingSystem
 {
     class DatabaseConnection
     {
-        private string connectionString = $"server=127.0.0.1;user=root;database=BankingSystem;port=3306;password={Environment.GetEnvironmentVariable("DB_PASSWORD")};SslMode=Preferred";
+        private string connectionString = "Data Source=BankingSystem.db";
 
-        public MySqlConnection GetConnection()
+        public SqliteConnection GetConnection()
         {
-            return new MySqlConnection(connectionString);
+            return new SqliteConnection(connectionString);
+        }
+
+        public void InitializeDatabase()
+        {
+            using (var conn = GetConnection())
+            {
+                conn.Open();
+                string sql = @"
+                    CREATE TABLE IF NOT EXISTS Users (
+                        UserID INTEGER PRIMARY KEY AUTOINCREMENT,
+                        FullName TEXT NOT NULL,
+                        Email TEXT UNIQUE NOT NULL,
+                        Phone TEXT,
+                        Password TEXT NOT NULL,
+                        CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+
+                    CREATE TABLE IF NOT EXISTS Accounts (
+                        AccountID INTEGER PRIMARY KEY AUTOINCREMENT,
+                        HolderName TEXT NOT NULL,
+                        Balance DECIMAL(10,2) DEFAULT 0.00,
+                        AccountType TEXT CHECK(AccountType IN ('Savings', 'Current')),
+                        CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        Status TEXT DEFAULT 'Active',
+                        UserID INTEGER,
+                        FOREIGN KEY (UserID) REFERENCES Users(UserID)
+                    );
+
+                    CREATE TABLE IF NOT EXISTS Transactions (
+                        TransactionID TEXT PRIMARY KEY,
+                        AccountID INTEGER,
+                        Type TEXT CHECK(Type IN ('Deposit', 'Withdraw', 'Transfer Out', 'Transfer In')),
+                        Amount DECIMAL(10,2),
+                        Description TEXT,
+                        TransactionDate DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (AccountID) REFERENCES Accounts(AccountID)
+                    );";
+                using (var cmd = new SqliteCommand(sql, conn))
+                {
+                    cmd.ExecuteNonQuery();
+                }
+            }
         }
     }
 
@@ -31,39 +73,26 @@ namespace BankingSystem
             CreatedAt = DateTime.Now;
         }
 
-        public static int AddUserToDatabase(MySqlConnection conn, User newUser)
+        public static int AddUserToDatabase(SqliteConnection conn, User newUser)
         {
             try
             {
-                if (newUser.Password.Length > 255)
-                {
-                    Console.WriteLine("Error: Password exceeds maximum length");
-                    return -1;
-                }
-
                 string query = @"INSERT INTO Users 
                         (FullName, Email, Phone, Password, CreatedAt) 
                         VALUES 
-                        (@FullName, @Email, @Phone, @Password, @CreatedAt)";
+                        (@FullName, @Email, @Phone, @Password, @CreatedAt);
+                        SELECT last_insert_rowid();";
 
-                using (var cmd = new MySqlCommand(query, conn))
+                using (var cmd = new SqliteCommand(query, conn))
                 {
-                    cmd.Parameters.Add("@FullName", MySqlDbType.VarChar, 100).Value = newUser.FullName;
-                    cmd.Parameters.Add("@Email", MySqlDbType.VarChar, 255).Value = newUser.Email;
-                    cmd.Parameters.Add("@Phone", MySqlDbType.VarChar, 15).Value = newUser.Phone;
-                    cmd.Parameters.Add("@Password", MySqlDbType.VarChar, 255).Value = newUser.Password;
-                    cmd.Parameters.Add("@CreatedAt", MySqlDbType.DateTime).Value = newUser.CreatedAt;
+                    cmd.Parameters.AddWithValue("@FullName", newUser.FullName);
+                    cmd.Parameters.AddWithValue("@Email", newUser.Email);
+                    cmd.Parameters.AddWithValue("@Phone", newUser.Phone);
+                    cmd.Parameters.AddWithValue("@Password", newUser.Password);
+                    cmd.Parameters.AddWithValue("@CreatedAt", newUser.CreatedAt);
 
-                    cmd.ExecuteNonQuery();
-
-                    cmd.CommandText = "SELECT LAST_INSERT_ID()";
                     return Convert.ToInt32(cmd.ExecuteScalar());
                 }
-            }
-            catch (MySqlException ex) when (ex.Number == 1406)
-            {
-                Console.WriteLine($"Database error: {ex.Message}");
-                return -1;
             }
             catch (Exception ex)
             {
@@ -92,7 +121,7 @@ namespace BankingSystem
             CreatedAt = DateTime.Now;
         }
 
-        public static bool AddAccountToDatabase(MySqlConnection conn, Account newAccount)
+        public static bool AddAccountToDatabase(SqliteConnection conn, Account newAccount)
         {
             try
             {
@@ -101,7 +130,7 @@ namespace BankingSystem
                         VALUES 
                         (@HolderName, @Balance, @AccountType, @Status, @UserID, @CreatedAt)";
 
-                using (var cmd = new MySqlCommand(query, conn))
+                using (var cmd = new SqliteCommand(query, conn))
                 {
                     cmd.Parameters.AddWithValue("@HolderName", newAccount.HolderName);
                     cmd.Parameters.AddWithValue("@Balance", newAccount.Balance);
@@ -120,17 +149,52 @@ namespace BankingSystem
                 return false;
             }
         }
+
+        public static bool UpdateBalance(SqliteConnection conn, int accountId, decimal amount, SqliteTransaction transaction = null)
+        {
+            try
+            {
+                // If amount is negative (withdrawal/transfer out), we check for sufficient funds within the query.
+                string query = amount >= 0
+                    ? "UPDATE Accounts SET Balance = Balance + @Amount WHERE AccountID = @AccountID"
+                    : "UPDATE Accounts SET Balance = Balance + @Amount WHERE AccountID = @AccountID AND Balance >= ABS(@Amount)";
+
+                using (var cmd = new SqliteCommand(query, conn, transaction))
+                {
+                    cmd.Parameters.AddWithValue("@Amount", amount);
+                    cmd.Parameters.AddWithValue("@AccountID", accountId);
+                    int rows = cmd.ExecuteNonQuery();
+                    return rows > 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating balance: {ex.Message}");
+                return false;
+            }
+        }
+
+        public static decimal GetBalance(SqliteConnection conn, int accountId)
+        {
+            string query = "SELECT Balance FROM Accounts WHERE AccountID = @AccountID";
+            using (var cmd = new SqliteCommand(query, conn))
+            {
+                cmd.Parameters.AddWithValue("@AccountID", accountId);
+                var result = cmd.ExecuteScalar();
+                return result != null ? Convert.ToDecimal(result) : -1;
+            }
+        }
     }
 
     public class Transactions
     {
         public string TransactionID { get; set; }
-        public string AccountID { get; set; }
+        public int AccountID { get; set; }
         public string TransactionType { get; set; }
         public decimal Amount { get; set; }
         public DateTime TransactionDate { get; set; }
 
-        public Transactions(string transactionID, string accountID, string transactionType, decimal amount, DateTime transactionDate)
+        public Transactions(string transactionID, int accountID, string transactionType, decimal amount, DateTime transactionDate)
         {
             TransactionID = transactionID;
             AccountID = accountID;
@@ -139,14 +203,14 @@ namespace BankingSystem
             TransactionDate = transactionDate;
         }
 
-        public static bool AddTransactionsToDatabase(MySqlConnection conn, Transactions newTransaction)
+        public static bool AddTransactionsToDatabase(SqliteConnection conn, Transactions newTransaction, SqliteTransaction transaction = null)
         {
             try
             {
-                string query = @"INSERT INTO transactions (TransactionID, AccountID, Type, Amount, TransactionDate)
+                string query = @"INSERT INTO Transactions (TransactionID, AccountID, Type, Amount, TransactionDate)
                              VALUES (@TransactionID, @AccountID, @Type, @Amount, @TransactionDate)";
 
-                using (var cmd = new MySqlCommand(query, conn))
+                using (var cmd = new SqliteCommand(query, conn, transaction))
                 {
                     cmd.Parameters.AddWithValue("@TransactionID", newTransaction.TransactionID);
                     cmd.Parameters.AddWithValue("@AccountID", newTransaction.AccountID);
@@ -165,21 +229,21 @@ namespace BankingSystem
             }
         }
 
-        public static void ViewTransactions(MySqlConnection conn, string accountId)
+        public static void ViewTransactions(SqliteConnection conn, int accountId)
         {
-            string query = "SELECT * FROM transactions WHERE AccountID = @accountId";
-            using (var cmd = new MySqlCommand(query, conn))
+            string query = "SELECT * FROM Transactions WHERE AccountID = @accountId ORDER BY TransactionDate DESC";
+            using (var cmd = new SqliteCommand(query, conn))
             {
                 cmd.Parameters.AddWithValue("@accountId", accountId);
 
                 using (var reader = cmd.ExecuteReader())
                 {
                     Console.WriteLine("\nTransaction History:");
+                    Console.WriteLine("Date                | Type         | Amount");
+                    Console.WriteLine("-------------------------------------------");
                     while (reader.Read())
                     {
-                        Console.WriteLine($"{reader["TransactionDate"]} | " +
-                                        $"{reader["Type"]} | " +
-                                        $"{reader["Amount"]}");
+                        Console.WriteLine($"{reader["TransactionDate"],-19} | {reader["Type"],-12} | {reader["Amount"],10:C}");
                     }
                 }
             }
@@ -224,11 +288,11 @@ namespace BankingSystem
             {
                 Console.Write(prompt);
                 input = Console.ReadLine();
-                if (!validation(input))
+                if (input == null || !validation(input))
                 {
                     Console.WriteLine("Invalid input. Please try again.");
                 }
-            } while (!validation(input));
+            } while (input == null || !validation(input));
 
             return input;
         }
@@ -236,10 +300,14 @@ namespace BankingSystem
         static void Main(string[] args)
         {
             Console.WriteLine("Welcome to the Super Secure Bank!");
+
+            var dbConn = new DatabaseConnection();
+            dbConn.InitializeDatabase();
+
             Console.WriteLine("Please create a new user profile before creating an account.");
             Console.WriteLine("Let's get started...");
 
-            using (var conn = new DatabaseConnection().GetConnection())
+            using (var conn = dbConn.GetConnection())
             {
                 try
                 {
@@ -248,8 +316,6 @@ namespace BankingSystem
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Database connection error: {ex.Message}");
-                    Console.WriteLine("Press any key to exit...");
-                    Console.ReadKey();
                     return;
                 }
 
@@ -265,7 +331,6 @@ namespace BankingSystem
                 if (userId == -1)
                 {
                     Console.WriteLine("User creation failed. Exiting...");
-                    Console.ReadKey();
                     return;
                 }
 
@@ -314,105 +379,136 @@ namespace BankingSystem
                     Console.WriteLine("Account creation skipped.");
                 }
 
-                // Transaction section
-                Console.WriteLine();
-                Console.WriteLine("===================================");
-                Console.WriteLine(" Welcome to Super Secure Bank ");
-                Console.WriteLine("===================================");
-                Console.WriteLine("Please choose a transaction:");
-                Console.WriteLine("1. Deposit");
-                Console.WriteLine("2. Withdraw");
-                Console.WriteLine("3. Transfer");
-                Console.WriteLine("4. View Transaction History");
-                Console.WriteLine("0. Exit");
-                Console.WriteLine("===================================");
-
-                Console.Write("\nEnter your choice: ");
-                string choice = Console.ReadLine();
-
-                switch (choice)
+                while (true)
                 {
-                    case "1":
-                        Console.WriteLine("You chose Deposit!");
-                        Console.Write("Enter your Account ID: ");
-                        string depositAccountId = Console.ReadLine();
+                    // Transaction section
+                    Console.WriteLine();
+                    Console.WriteLine("===================================");
+                    Console.WriteLine(" Welcome to Super Secure Bank ");
+                    Console.WriteLine("===================================");
+                    Console.WriteLine("Please choose a transaction:");
+                    Console.WriteLine("1. Deposit");
+                    Console.WriteLine("2. Withdraw");
+                    Console.WriteLine("3. Transfer");
+                    Console.WriteLine("4. View Transaction History");
+                    Console.WriteLine("0. Exit");
+                    Console.WriteLine("===================================");
 
-                        Console.Write("\nEnter amount to deposit: ");
-                        decimal depositAmount;
-                        while (!decimal.TryParse(Console.ReadLine(), out depositAmount) || depositAmount <= 0)
-                        {
-                            Console.Write("Invalid amount. Enter a positive number: ");
-                        }
-                        break;
+                    Console.Write("\nEnter your choice: ");
+                    string choice = Console.ReadLine();
 
-                    case "2":
-                        Console.WriteLine("\nYou chose Withdraw!");
-                        Console.Write("\nEnter your Account ID: ");
-                        string withdrawAccountId = Console.ReadLine();
+                    if (choice == "0") break;
 
-                        Console.Write("\nEnter amount to withdraw: ");
-                        decimal withdrawAmount;
-                        while (!decimal.TryParse(Console.ReadLine(), out withdrawAmount) || withdrawAmount <= 0)
-                        {
-                            Console.Write("\nInvalid amount. Enter a positive number: ");
-                        }
-                        break;
+                    switch (choice)
+                    {
+                        case "1":
+                            Console.WriteLine("\nYou chose Deposit!");
+                            Console.Write("Enter your Account ID: ");
+                            if (int.TryParse(Console.ReadLine(), out int depositAccountId))
+                            {
+                                Console.Write("Enter amount to deposit: ");
+                                if (decimal.TryParse(Console.ReadLine(), out decimal depositAmount) && depositAmount > 0)
+                                {
+                                    if (Account.UpdateBalance(conn, depositAccountId, depositAmount))
+                                    {
+                                        var depositTx = new Transactions(Guid.NewGuid().ToString(), depositAccountId, "Deposit", depositAmount, DateTime.Now);
+                                        Transactions.AddTransactionsToDatabase(conn, depositTx);
+                                        Console.WriteLine("Deposit successful!");
+                                    }
+                                    else Console.WriteLine("Account not found.");
+                                }
+                                else Console.WriteLine("Invalid amount.");
+                            }
+                            else Console.WriteLine("Invalid Account ID.");
+                            break;
 
-                    case "3":
-                        Console.WriteLine("\nYou chose Transfer!");
-                        Console.Write("Enter your Account ID: ");
-                        string fromAccount = Console.ReadLine();
+                        case "2":
+                            Console.WriteLine("\nYou chose Withdraw!");
+                            Console.Write("Enter your Account ID: ");
+                            if (int.TryParse(Console.ReadLine(), out int withdrawAccountId))
+                            {
+                                Console.Write("Enter amount to withdraw: ");
+                                if (decimal.TryParse(Console.ReadLine(), out decimal withdrawAmount) && withdrawAmount > 0)
+                                {
+                                    if (Account.UpdateBalance(conn, withdrawAccountId, -withdrawAmount))
+                                    {
+                                        var withdrawTx = new Transactions(Guid.NewGuid().ToString(), withdrawAccountId, "Withdraw", withdrawAmount, DateTime.Now);
+                                        Transactions.AddTransactionsToDatabase(conn, withdrawTx);
+                                        Console.WriteLine("Withdrawal successful!");
+                                    }
+                                    else Console.WriteLine("Withdrawal failed. Check Account ID and Balance.");
+                                }
+                                else Console.WriteLine("Invalid amount.");
+                            }
+                            else Console.WriteLine("Invalid Account ID.");
+                            break;
 
-                        Console.Write("Enter recipient Account ID: ");
-                        string toAccount = Console.ReadLine();
+                        case "3":
+                            Console.WriteLine("\nYou chose Transfer!");
+                            Console.Write("Enter your Account ID: ");
+                            if (!int.TryParse(Console.ReadLine(), out int fromAccount)) { Console.WriteLine("Invalid ID."); break; }
 
-                        Console.Write("Enter amount: ");
-                        decimal amount = decimal.Parse(Console.ReadLine());
+                            Console.Write("Enter recipient Account ID: ");
+                            if (!int.TryParse(Console.ReadLine(), out int toAccount)) { Console.WriteLine("Invalid ID."); break; }
 
-                        // Record transfer-out transaction
-                        var transferOut = new Transactions(
-                            Guid.NewGuid().ToString(),
-                            fromAccount,
-                            "Transfer Out",
-                            amount,
-                            DateTime.Now
-                        );
+                            Console.Write("Enter amount: ");
+                            if (!decimal.TryParse(Console.ReadLine(), out decimal amount) || amount <= 0) { Console.WriteLine("Invalid amount."); break; }
 
-                        // Record transfer-in transaction
-                        var transferIn = new Transactions(
-                            Guid.NewGuid().ToString(),
-                            toAccount,
-                            "Transfer In",
-                            amount,
-                            DateTime.Now
-                        );
+                            using (var transaction = conn.BeginTransaction())
+                            {
+                                try
+                                {
+                                    if (Account.UpdateBalance(conn, fromAccount, -amount, transaction))
+                                    {
+                                        if (Account.UpdateBalance(conn, toAccount, amount, transaction))
+                                        {
+                                            var txOut = new Transactions(Guid.NewGuid().ToString(), fromAccount, "Transfer Out", amount, DateTime.Now);
+                                            var txIn = new Transactions(Guid.NewGuid().ToString(), toAccount, "Transfer In", amount, DateTime.Now);
 
-                        Transactions.AddTransactionsToDatabase(conn, transferOut);
-                        Transactions.AddTransactionsToDatabase(conn, transferIn);
+                                            Transactions.AddTransactionsToDatabase(conn, txOut, transaction);
+                                            Transactions.AddTransactionsToDatabase(conn, txIn, transaction);
 
-                        Console.WriteLine("Transfer recorded!");
-                        break;
+                                            transaction.Commit();
+                                            Console.WriteLine("Transfer successful!");
+                                        }
+                                        else
+                                        {
+                                            transaction.Rollback();
+                                            Console.WriteLine("Transfer failed. Recipient account not found.");
+                                        }
+                                    }
+                                    else
+                                    {
+                                        transaction.Rollback();
+                                        Console.WriteLine("Transfer failed. Insufficient funds or invalid source account.");
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    transaction.Rollback();
+                                    Console.WriteLine($"Error during transfer: {ex.Message}");
+                                }
+                            }
+                            break;
 
-                    case "4":
-                        Console.WriteLine("\nYou chose Transaction History!");
-                        Console.Write("Enter Account ID: ");
-                        string accountId = Console.ReadLine();
-                        Transactions.ViewTransactions(conn, accountId);
-                        break;
+                        case "4":
+                            Console.WriteLine("\nYou chose Transaction History!");
+                            Console.Write("Enter Account ID: ");
+                            if (int.TryParse(Console.ReadLine(), out int histAccountId))
+                            {
+                                Transactions.ViewTransactions(conn, histAccountId);
+                            }
+                            else Console.WriteLine("Invalid Account ID.");
+                            break;
 
-                    case "0":
-                        Console.WriteLine("\nExiting... Goodbye!");
-                        break;
-
-                    default:
-                        Console.WriteLine("\nInvalid choice! Try again.");
-                        break;
+                        default:
+                            Console.WriteLine("\nInvalid choice! Try again.");
+                            break;
+                    }
                 }
 
                 Console.WriteLine("Thank you for choosing our bank.");
-
                 Console.WriteLine("\nPress any key to exit...");
-                Console.ReadKey();
             }
         }
     }
